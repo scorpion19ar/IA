@@ -1,16 +1,18 @@
 from flask import Flask, jsonify, request
-from flask_cors import CORS  # 👈 Agregado para habilitar CORS
 from dotenv import load_dotenv
 import os
 import joblib
 import pandas as pd
 from data_service import obtener_partidos
 
-# Cargar variables de entorno
+# Cargar variables de entorno de .env
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # 👈 Habilita CORS para todas las rutas y orígenes
+
+# Cargar modelo y diccionario equipo_to_num al iniciar la app (para no cargar cada vez)
+modelo = joblib.load('modelo_rf.joblib')
+equipo_to_num = joblib.load('equipo_to_num.joblib')
 
 @app.route('/')
 def inicio():
@@ -24,25 +26,38 @@ def datos():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/predecir', methods=['GET'])
+@app.route('/predecir')
 def predecir():
+    local = request.args.get('local')
+    visitante = request.args.get('visitante')
+    if not local or not visitante:
+        return jsonify({"error": "Faltan parámetros 'local' o 'visitante'"}), 400
+
+    # Verificar si equipos existen en el diccionario
+    if local not in equipo_to_num or visitante not in equipo_to_num:
+        return jsonify({"error": "Uno o ambos equipos no están en la lista de equipos conocidos"}), 400
+
+    # Crear dataframe con la estructura esperada para la predicción
+    X = pd.DataFrame([{
+        'equipo_local_num': equipo_to_num[local],
+        'equipo_visitante_num': equipo_to_num[visitante]
+    }])
+
     try:
-        modelo = joblib.load('modelo_entrenado.pkl')
-
-        # Obtener últimos partidos
-        partidos = obtener_partidos()
-        df = pd.DataFrame(partidos)
-
-        if df.empty:
-            return jsonify({"error": "No hay datos suficientes"}), 400
-
-        X = df[['goles_local', 'goles_visitante']]
-        predicciones = modelo.predict(X)
-        df['prediccion'] = predicciones
-
-        return jsonify(df.to_dict(orient='records'))
+        pred = modelo.predict(X)[0]
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Error en la predicción: {str(e)}"}), 500
+
+    # Interpretar la predicción
+    mapping = {0: "Gana Local", 1: "Gana Visitante", 2: "Empate"}
+    resultado = mapping.get(pred, "Resultado desconocido")
+
+    return jsonify({
+        "local": local,
+        "visitante": visitante,
+        "prediccion": resultado
+    })
 
 if __name__ == '__main__':
+    # Debug True solo para desarrollo, en producción poner False
     app.run(host='0.0.0.0', port=5000, debug=True)
