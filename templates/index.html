@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pronóstico de partidos</title>
+</head>
+<body>
+    <h1>Pronóstico de partidos</h1>
+
+    {% if error %}
+    <p style="color:red;">{{ error }}</p>
+    {% endif %}
+
+    <form action="/predecir" method="post">
+        <label for="local">Equipo Local:</label>
+        <select name="local" id="local" required>
+            {% for equipo in equipos %}
+                <option value="{{ equipo }}">{{ equipo }}</option>
+            {% endfor %}
+        </select>
+
+        <br><br>
+
+        <label for="visitante">Equipo Visitante:</label>
+        <select name="visitante" id="visitante" required>
+            {% for equipo in equipos %}
+                <option value="{{ equipo }}">{{ equipo }}</option>
+            {% endfor %}
+        </select>
+
+        <br><br>
+
+        <button type="submit">Predecir</button>
+    </form>
+</body>
+</html>
